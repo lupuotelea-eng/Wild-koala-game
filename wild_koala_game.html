@@ -1,0 +1,777 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Kobi & MORF-7 — Prototip joc web</title>
+  <style>
+    :root {
+      --bg: #111827;
+      --panel: #1f2937;
+      --panel2: #243244;
+      --text: #f3f4f6;
+      --muted: #cbd5e1;
+      --accent: #f59e0b;
+      --good: #22c55e;
+      --bad: #ef4444;
+      --sky: #1e3a8a;
+      --grass: #14532d;
+      --path: #6b4f2a;
+      --water: #0ea5e9;
+      --fire: #f97316;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      background: linear-gradient(180deg, #0f172a, #111827);
+      color: var(--text);
+    }
+    .app {
+      display: grid;
+      grid-template-columns: 320px 1fr;
+      gap: 16px;
+      min-height: 100vh;
+      padding: 16px;
+    }
+    .panel {
+      background: rgba(31,41,55,.95);
+      border: 1px solid rgba(255,255,255,.08);
+      border-radius: 18px;
+      padding: 16px;
+      box-shadow: 0 8px 30px rgba(0,0,0,.25);
+    }
+    h1, h2, h3, p { margin-top: 0; }
+    h1 { font-size: 1.35rem; margin-bottom: 8px; }
+    h2 { font-size: 1.05rem; margin-bottom: 8px; }
+    .muted { color: var(--muted); }
+    .hud-row {
+      display: flex; justify-content: space-between; align-items: center; gap: 12px;
+      margin-bottom: 10px; font-size: .95rem;
+    }
+    .badge {
+      display: inline-block; padding: 4px 10px; border-radius: 999px;
+      background: rgba(245,158,11,.15); color: #fde68a; border: 1px solid rgba(245,158,11,.35);
+      font-size: .82rem; font-weight: 600;
+    }
+    .objective {
+      padding: 10px 12px; border-radius: 12px; margin: 8px 0;
+      background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.06);
+      font-size: .95rem;
+    }
+    .objective.done { border-color: rgba(34,197,94,.45); background: rgba(34,197,94,.12); color: #dcfce7; }
+    .dialogue {
+      min-height: 180px; max-height: 34vh; overflow: auto;
+      background: rgba(255,255,255,.03);
+      border: 1px solid rgba(255,255,255,.06);
+      border-radius: 14px; padding: 12px;
+      line-height: 1.4;
+    }
+    .line { margin-bottom: 10px; }
+    .speaker { font-weight: 700; color: #fde68a; }
+    .controls { font-size: .9rem; color: var(--muted); }
+    button {
+      appearance: none; border: 0; cursor: pointer;
+      background: linear-gradient(180deg, #f59e0b, #d97706);
+      color: white; font-weight: 700;
+      border-radius: 12px; padding: 12px 14px; width: 100%;
+      margin-top: 10px; transition: transform .08s ease, filter .2s ease;
+    }
+    button:hover { filter: brightness(1.05); }
+    button:active { transform: translateY(1px); }
+    button.secondary { background: linear-gradient(180deg, #475569, #334155); }
+    .game-wrap { display: grid; grid-template-rows: auto 1fr auto; gap: 12px; }
+    .topbar {
+      display: flex; justify-content: space-between; align-items: center; gap: 10px;
+      flex-wrap: wrap;
+    }
+    .stats {
+      display: flex; gap: 8px; flex-wrap: wrap;
+    }
+    .stat {
+      background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.08);
+      padding: 8px 12px; border-radius: 12px; font-size: .92rem;
+    }
+    canvas {
+      width: 100%; height: min(72vh, 760px);
+      background: #0b1324;
+      border-radius: 18px; display: block;
+      border: 1px solid rgba(255,255,255,.08);
+    }
+    .footnote { color: var(--muted); font-size: .88rem; }
+    a { color: #93c5fd; }
+    @media (max-width: 1000px) {
+      .app { grid-template-columns: 1fr; }
+      canvas { height: 56vh; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <aside class="panel">
+      <h1>Kobi & MORF-7</h1>
+      <p class="muted">Prototip de joc browser bazat pe scenariul tău. Este un prim vertical slice jucabil online, cu dialog, explorare și obiective.</p>
+
+      <div class="hud-row">
+        <span class="badge" id="chapterBadge">Capitolul 1</span>
+        <span class="muted" id="phaseLabel">Introducere</span>
+      </div>
+
+      <h2>Obiective</h2>
+      <div id="objectives"></div>
+
+      <h2>Dialog</h2>
+      <div class="dialogue" id="dialogue"></div>
+
+      <button id="actionBtn">Începe jocul</button>
+      <button class="secondary" id="restartBtn">Repornește</button>
+
+      <h2 style="margin-top:16px;">Controale</h2>
+      <div class="controls">
+        <p><strong>Mișcare:</strong> W A S D sau săgeți</p>
+        <p><strong>Interacțiune:</strong> Space sau Enter când ești aproape de obiect</p>
+        <p><strong>Scop:</strong> colectează, repară, salvează și protejează pădurea</p>
+      </div>
+    </aside>
+
+    <main class="panel game-wrap">
+      <div class="topbar">
+        <div>
+          <h2 style="margin-bottom:4px;">Pădurea după furtună</h2>
+          <div class="footnote" id="hintText">Apasă „Începe jocul” pentru a porni introducerea.</div>
+        </div>
+        <div class="stats">
+          <div class="stat">Piese: <strong id="piecesStat">0/3</strong></div>
+          <div class="stat">Frunze: <strong id="leavesStat">0/3</strong></div>
+          <div class="stat">Ouă salvate: <strong id="eggsStat">0/2</strong></div>
+          <div class="stat">Animale salvate: <strong id="animalsStat">0/3</strong></div>
+        </div>
+      </div>
+
+      <canvas id="game" width="1100" height="760"></canvas>
+
+      <div class="footnote">
+        Acest prototip este 100% originalizat față de IP-ul menționat anterior: personaje, lume și structură proprie. Poate fi extins apoi în React/Phaser/Unity și publicat ca demo web sau base build pentru App Store.
+      </div>
+    </main>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('game');
+    const ctx = canvas.getContext('2d');
+
+    const ui = {
+      objectives: document.getElementById('objectives'),
+      dialogue: document.getElementById('dialogue'),
+      actionBtn: document.getElementById('actionBtn'),
+      restartBtn: document.getElementById('restartBtn'),
+      hintText: document.getElementById('hintText'),
+      phaseLabel: document.getElementById('phaseLabel'),
+      piecesStat: document.getElementById('piecesStat'),
+      leavesStat: document.getElementById('leavesStat'),
+      eggsStat: document.getElementById('eggsStat'),
+      animalsStat: document.getElementById('animalsStat')
+    };
+
+    const keys = {};
+    addEventListener('keydown', e => {
+      keys[e.key.toLowerCase()] = true;
+      if ([" ","ArrowUp","ArrowDown","ArrowLeft","ArrowRight"].includes(e.key)) e.preventDefault();
+      if ((e.key === ' ' || e.key === 'Enter') && state.started) interact();
+    });
+    addEventListener('keyup', e => keys[e.key.toLowerCase()] = false);
+
+    const WORLD = { w: canvas.width, h: canvas.height };
+
+    const state = {
+      started: false,
+      phase: 0,
+      moveEnabled: false,
+      player: { x: 170, y: 560, r: 18, speed: 2.6 },
+      robotOnline: false,
+      trunkCleared: false,
+      nestRepaired: false,
+      strengthMode: false,
+      waterMode: false,
+      memoryFound: false,
+      fireStopped: false,
+      pieces: 0,
+      leaves: 0,
+      eggs: 0,
+      animals: 0,
+      rescuedBirds: false,
+      talaMet: false,
+      rangoMet: false,
+      messageCooldown: 0
+    };
+
+    let entities = [];
+    let particles = [];
+
+    function resetGame() {
+      state.started = false;
+      state.phase = 0;
+      state.moveEnabled = false;
+      state.player = { x: 170, y: 560, r: 18, speed: 2.6 };
+      state.robotOnline = false;
+      state.trunkCleared = false;
+      state.nestRepaired = false;
+      state.strengthMode = false;
+      state.waterMode = false;
+      state.memoryFound = false;
+      state.fireStopped = false;
+      state.pieces = 0;
+      state.leaves = 0;
+      state.eggs = 0;
+      state.animals = 0;
+      state.rescuedBirds = false;
+      state.talaMet = false;
+      state.rangoMet = false;
+      state.messageCooldown = 0;
+      particles = [];
+      entities = buildEntities();
+      ui.dialogue.innerHTML = '';
+      ui.actionBtn.textContent = 'Începe jocul';
+      ui.phaseLabel.textContent = 'Introducere';
+      ui.hintText.textContent = 'Apasă „Începe jocul” pentru a porni introducerea.';
+      renderObjectives();
+      syncStats();
+    }
+
+    function buildEntities() {
+      return [
+        { id:'pod', type:'wreck', x: 410, y: 220, r: 30, active:true },
+        { id:'piece1', type:'piece', x: 235, y: 450, r: 12, active:true },
+        { id:'piece2', type:'piece', x: 345, y: 610, r: 12, active:true },
+        { id:'piece3', type:'piece', x: 560, y: 510, r: 12, active:true },
+        { id:'leaf1', type:'leaf', x: 120, y: 300, r: 11, active:true },
+        { id:'leaf2', type:'leaf', x: 690, y: 590, r: 11, active:true },
+        { id:'leaf3', type:'leaf', x: 855, y: 175, r: 11, active:true },
+        { id:'robot', type:'robot', x: 455, y: 230, r: 20, active:false },
+        { id:'trunk', type:'trunk', x: 780, y: 235, w: 140, h: 32, active:false },
+        { id:'nest', type:'nest', x: 920, y: 190, r: 24, active:false },
+        { id:'egg1', type:'egg', x: 838, y: 330, r: 12, active:false },
+        { id:'egg2', type:'egg', x: 965, y: 315, r: 12, active:false },
+        { id:'tala', type:'npc', name:'Tala', x: 250, y: 120, r: 20, active:false },
+        { id:'workshop', type:'workshop', x: 280, y: 125, r: 36, active:false },
+        { id:'rango', type:'npc', name:'Rango', x: 675, y: 140, r: 22, active:false },
+        { id:'animal1', type:'animal', x: 770, y: 585, r: 14, active:false },
+        { id:'animal2', type:'animal', x: 915, y: 540, r: 14, active:false },
+        { id:'animal3', type:'animal', x: 995, y: 635, r: 14, active:false },
+        { id:'firezone', type:'firezone', x: 905, y: 575, r: 85, active:false },
+        { id:'spring', type:'spring', x: 1010, y: 490, r: 28, active:false },
+        { id:'memory', type:'memory', x: 1050, y: 450, r: 14, active:false },
+      ];
+    }
+
+    const objectivesByPhase = {
+      0: ['Pornește jocul și urmărește introducerea.'],
+      1: ['Găsește 3 piese metalice.', 'Adună 3 frunze medicinale.', 'Repornește capsula din copac.'],
+      2: ['Vorbește cu MORF-7.', 'Ajunge la cuibul păsărilor.'],
+      3: ['Activează Modul Forță.', 'Mută trunchiul căzut.', 'Salvează cele 2 ouă.', 'Repară cuibul.'],
+      4: ['Mergi la atelierul ascuns al Tălei.', 'Află ce știe despre robot.'],
+      5: ['Vorbește cu Rango.', 'Ajunge la valea cu fum.'],
+      6: ['Salvează 3 animale blocate.', 'Activează Modul Apă la izvor.', 'Oprește focul înainte să ajungă la apă.', 'Găsește fragmentul de memorie.'],
+      7: ['Capitol complet. Repornește sau extinde prototipul.']
+    };
+
+    function renderObjectives() {
+      const current = objectivesByPhase[state.phase] || [];
+      const done = new Set();
+      if (state.phase >= 1) {
+        if (state.pieces >= 3) done.add('Găsește 3 piese metalice.');
+        if (state.leaves >= 3) done.add('Adună 3 frunze medicinale.');
+        if (state.robotOnline) done.add('Repornește capsula din copac.');
+      }
+      if (state.phase >= 2) {
+        if (state.robotOnline) done.add('Vorbește cu MORF-7.');
+        if (getEnt('trunk').active) done.add('Ajunge la cuibul păsărilor.');
+      }
+      if (state.phase >= 3) {
+        if (state.strengthMode) done.add('Activează Modul Forță.');
+        if (state.trunkCleared) done.add('Mută trunchiul căzut.');
+        if (state.eggs >= 2) done.add('Salvează cele 2 ouă.');
+        if (state.nestRepaired) done.add('Repară cuibul.');
+      }
+      if (state.phase >= 4) {
+        if (state.talaMet) done.add('Mergi la atelierul ascuns al Tălei.');
+        if (state.talaMet) done.add('Află ce știe despre robot.');
+      }
+      if (state.phase >= 5) {
+        if (state.rangoMet) done.add('Vorbește cu Rango.');
+        if (getEnt('firezone').active) done.add('Ajunge la valea cu fum.');
+      }
+      if (state.phase >= 6) {
+        if (state.animals >= 3) done.add('Salvează 3 animale blocate.');
+        if (state.waterMode) done.add('Activează Modul Apă la izvor.');
+        if (state.fireStopped) done.add('Oprește focul înainte să ajungă la apă.');
+        if (state.memoryFound) done.add('Găsește fragmentul de memorie.');
+      }
+      if (state.phase >= 7) done.add('Capitol complet. Repornește sau extinde prototipul.');
+
+      ui.objectives.innerHTML = current.map(text => `<div class="objective ${done.has(text)?'done':''}">${done.has(text)?'✅ ':'⬜ '}${text}</div>`).join('');
+    }
+
+    function syncStats() {
+      ui.piecesStat.textContent = `${state.pieces}/3`;
+      ui.leavesStat.textContent = `${state.leaves}/3`;
+      ui.eggsStat.textContent = `${state.eggs}/2`;
+      ui.animalsStat.textContent = `${state.animals}/3`;
+    }
+
+    function say(speaker, text) {
+      const div = document.createElement('div');
+      div.className = 'line';
+      div.innerHTML = `<span class="speaker">${speaker}:</span> ${text}`;
+      ui.dialogue.appendChild(div);
+      ui.dialogue.scrollTop = ui.dialogue.scrollHeight;
+    }
+
+    function setPhase(n, label, hint) {
+      state.phase = n;
+      ui.phaseLabel.textContent = label;
+      ui.hintText.textContent = hint;
+      renderObjectives();
+    }
+
+    function distance(a, b) {
+      return Math.hypot(a.x - b.x, a.y - b.y);
+    }
+
+    function getEnt(id) {
+      return entities.find(e => e.id === id);
+    }
+
+    function nearPlayer(ent, extra=18) {
+      return ent.active && distance(state.player, ent) < state.player.r + (ent.r || 20) + extra;
+    }
+
+    function startGame() {
+      if (state.started) return;
+      state.started = true;
+      state.moveEnabled = true;
+      setPhase(1, 'Furtuna', 'Explorează zona, adună piesele și frunzele, apoi repară capsula luminoasă.');
+      say('Narator', 'În inima unei păduri australiene, după o furtună violentă, ceva ciudat a căzut din cer.');
+      say('Kobi', 'Hmm... lumina asta vine dintre ramuri. Mai bine mă apropii.');
+      ui.actionBtn.textContent = 'Joc în curs';
+    }
+
+    function interact() {
+      if (!state.started) return;
+      const phase = state.phase;
+      const pod = getEnt('pod');
+      const robot = getEnt('robot');
+      const trunk = getEnt('trunk');
+      const nest = getEnt('nest');
+      const tala = getEnt('tala');
+      const rango = getEnt('rango');
+      const spring = getEnt('spring');
+      const memory = getEnt('memory');
+      const firezone = getEnt('firezone');
+
+      for (const ent of entities) {
+        if ((ent.type === 'piece' || ent.type === 'leaf' || ent.type === 'egg' || ent.type === 'animal' || ent.type === 'memory') && nearPlayer(ent)) {
+          if (!ent.active) continue;
+          if (ent.type === 'piece') {
+            ent.active = false; state.pieces++; syncStats(); spawnSpark(ent.x, ent.y, '#cbd5e1'); say('Kobi', 'Am găsit o piesă metalică utilă.');
+          } else if (ent.type === 'leaf') {
+            ent.active = false; state.leaves++; syncStats(); spawnSpark(ent.x, ent.y, '#86efac'); say('Kobi', 'Frunză medicinală găsită.');
+          } else if (ent.type === 'egg') {
+            ent.active = false; state.eggs++; syncStats(); spawnSpark(ent.x, ent.y, '#fef3c7'); say('Kobi', 'Am salvat un ou!');
+          } else if (ent.type === 'animal') {
+            ent.active = false; state.animals++; syncStats(); spawnSpark(ent.x, ent.y, '#fca5a5'); say('Animal', 'Mulțumesc!');
+          } else if (ent.type === 'memory' && state.fireStopped) {
+            ent.active = false; state.memoryFound = true; spawnSpark(ent.x, ent.y, '#93c5fd');
+            say('Memorie', 'Unitatea MORF-7 activată. Misiune: protejarea ecosistemelor fragile.');
+            say('Kobi', 'Prea târziu pentru ce?');
+            say('MORF-7', 'Date incomplete. Dar trebuie să continuăm.');
+            setPhase(7, 'Final capitol', 'Ai terminat primul capitol al prototipului.');
+          }
+          renderObjectives();
+          phaseChecks();
+          return;
+        }
+      }
+
+      if (phase === 1 && nearPlayer(pod)) {
+        if (state.pieces >= 3 && state.leaves >= 3) {
+          state.robotOnline = true;
+          robot.active = true;
+          say('MORF-7', 'Sistem repornit. Analiză mediu... locație necunoscută.');
+          say('Kobi', 'Aaaa! Tu vorbești!');
+          say('MORF-7', 'Cod identificare: MORF-7.');
+          getEnt('trunk').active = true;
+          getEnt('nest').active = true;
+          getEnt('egg1').active = true;
+          getEnt('egg2').active = true;
+          setPhase(2, 'Trezirea robotului', 'Vorbește cu MORF-7 și mergi spre cuibul păsărilor.');
+        } else {
+          say('Kobi', 'Îmi mai trebuie piese și frunze medicinale înainte să pornesc capsula.');
+        }
+        renderObjectives();
+        return;
+      }
+
+      if (phase === 2 && nearPlayer(robot)) {
+        say('Kobi', 'Morf, ai putea să mă ajuți? Se aud păsări speriate.');
+        say('MORF-7', 'Analiză: sunt disponibil pentru asistență.');
+        setPhase(3, 'Cuibul în pericol', 'Ajunge la cuib, activează Modul Forță și salvează ouăle.');
+        renderObjectives();
+        return;
+      }
+
+      if (phase === 3 && nearPlayer(trunk)) {
+        if (!state.strengthMode) {
+          state.strengthMode = true;
+          say('MORF-7', 'Transformare disponibilă. Mod Forță activat.');
+          renderObjectives();
+          return;
+        }
+        if (!state.trunkCleared) {
+          state.trunkCleared = true;
+          trunk.active = false;
+          say('MORF-7', 'Obstacol înlăturat.');
+          spawnSpark(trunk.x, trunk.y, '#fde68a');
+          renderObjectives();
+          phaseChecks();
+          return;
+        }
+      }
+
+      if (phase === 3 && nearPlayer(nest)) {
+        if (state.eggs >= 2) {
+          if (!state.nestRepaired) {
+            state.nestRepaired = true;
+            say('Pasărea-mamă', 'Mulțumesc! Cuibul este din nou sigur.');
+            say('Kobi', 'Vezi, Morf? Așa funcționează prietenia.');
+            say('MORF-7', 'Definiție nouă în curs de procesare: prietenie.');
+            getEnt('tala').active = true;
+            getEnt('workshop').active = true;
+            setPhase(4, 'Atelierul ascuns', 'Mergi la Tala.');
+            renderObjectives();
+            return;
+          }
+        } else {
+          say('Kobi', 'Mai întâi trebuie să adunăm toate ouăle.');
+          return;
+        }
+      }
+
+      if (phase === 4 && nearPlayer(tala)) {
+        if (!state.talaMet) {
+          state.talaMet = true;
+          say('Tala', 'Metal necunoscut. Circuit ars. Robotul ăsta a fost construit pentru ceva important.');
+          say('Kobi', 'Ce fel de ceva important?');
+          say('Tala', 'Nu știu încă. Dar ceva îl caută.');
+          getEnt('rango').active = true;
+          setPhase(5, 'Apare Rango', 'Vorbește cu Rango și urmează fumul din vale.');
+          renderObjectives();
+          return;
+        }
+      }
+
+      if (phase === 5 && nearPlayer(rango)) {
+        if (!state.rangoMet) {
+          state.rangoMet = true;
+          say('Rango', 'Dacă robotul vostru este util, să dovedească. Un incendiu se apropie de izvoare.');
+          say('Kobi', 'Atunci mergem acum!');
+          getEnt('animal1').active = true;
+          getEnt('animal2').active = true;
+          getEnt('animal3').active = true;
+          firezone.active = true;
+          spring.active = true;
+          setPhase(6, 'Valea cu foc', 'Salvează animalele, activează Modul Apă și oprește incendiul.');
+          renderObjectives();
+          return;
+        }
+      }
+
+      if (phase === 6 && nearPlayer(spring)) {
+        if (!state.waterMode) {
+          state.waterMode = true;
+          say('MORF-7', 'Mod Apă activat.');
+          spawnSpark(spring.x, spring.y, '#7dd3fc');
+          renderObjectives();
+          phaseChecks();
+          return;
+        }
+      }
+
+      if (phase === 6 && nearPlayer(firezone)) {
+        if (state.waterMode && state.animals >= 3) {
+          state.fireStopped = true;
+          firezone.active = false;
+          say('Rango', 'Bine. Robotul vostru chiar a ajutat.');
+          say('Tala', 'Ceva strălucește lângă izvor. Poate o memorie.');
+          getEnt('memory').active = true;
+          renderObjectives();
+          return;
+        } else {
+          say('Kobi', 'Mai întâi salvăm animalele și pornim forma de apă.');
+          return;
+        }
+      }
+
+      if (state.messageCooldown <= 0) {
+        say('Narator', 'Nu este nimic de făcut aici acum.');
+        state.messageCooldown = 45;
+      }
+    }
+
+    function phaseChecks() {
+      if (state.phase === 3 && state.strengthMode && state.trunkCleared && state.eggs >= 2 && state.nestRepaired) {
+        // handled on nest interaction
+      }
+      if (state.phase === 6 && state.animals >= 3 && state.waterMode && state.fireStopped && !getEnt('memory').active) {
+        getEnt('memory').active = true;
+      }
+    }
+
+    function spawnSpark(x, y, color) {
+      for (let i = 0; i < 14; i++) {
+        particles.push({ x, y, vx:(Math.random()-0.5)*4, vy:(Math.random()-0.5)*4, life:30+Math.random()*20, color });
+      }
+    }
+
+    function update() {
+      if (state.started && state.moveEnabled) {
+        let dx = 0, dy = 0;
+        if (keys['w'] || keys['arrowup']) dy -= 1;
+        if (keys['s'] || keys['arrowdown']) dy += 1;
+        if (keys['a'] || keys['arrowleft']) dx -= 1;
+        if (keys['d'] || keys['arrowright']) dx += 1;
+        const len = Math.hypot(dx, dy) || 1;
+        state.player.x += (dx/len) * state.player.speed;
+        state.player.y += (dy/len) * state.player.speed;
+      }
+
+      state.player.x = Math.max(20, Math.min(WORLD.w - 20, state.player.x));
+      state.player.y = Math.max(20, Math.min(WORLD.h - 20, state.player.y));
+
+      for (const p of particles) {
+        p.x += p.vx;
+        p.y += p.vy;
+        p.vy += 0.03;
+        p.life -= 1;
+      }
+      particles = particles.filter(p => p.life > 0);
+      if (state.messageCooldown > 0) state.messageCooldown--;
+    }
+
+    function drawBackground() {
+      const g = ctx.createLinearGradient(0, 0, 0, WORLD.h);
+      g.addColorStop(0, '#1d4ed8');
+      g.addColorStop(.35, '#1e3a8a');
+      g.addColorStop(.36, '#22543d');
+      g.addColorStop(1, '#14532d');
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, WORLD.w, WORLD.h);
+
+      // terrain blocks
+      ctx.fillStyle = '#6b4f2a';
+      ctx.fillRect(0, 620, WORLD.w, 140);
+      ctx.fillRect(90, 380, 200, 34);
+      ctx.fillRect(320, 530, 270, 34);
+      ctx.fillRect(665, 250, 310, 40);
+      ctx.fillRect(720, 480, 300, 42);
+
+      // water/spring area
+      ctx.fillStyle = 'rgba(14,165,233,.75)';
+      ctx.beginPath();
+      ctx.ellipse(1000, 500, 78, 48, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // trees
+      for (let i = 0; i < 22; i++) {
+        const x = 55 + i * 48 + (i % 2 ? 8 : -5);
+        const y = 95 + (i % 4) * 12;
+        drawTree(x, y, i % 3 === 0 ? 1.1 : 1);
+      }
+      for (let i = 0; i < 12; i++) {
+        drawTree(40 + i * 90, 675, 1.2);
+      }
+
+      // smoke / fire ambience
+      if (getEnt('firezone').active || state.fireStopped) {
+        const f = getEnt('firezone');
+        for (let i = 0; i < 7; i++) {
+          ctx.fillStyle = state.fireStopped ? 'rgba(120,120,120,.15)' : `rgba(249,115,22,${0.12 + (i*0.02)})`;
+          ctx.beginPath();
+          ctx.arc(f.x + Math.sin(performance.now()/450 + i)*10, f.y + Math.cos(performance.now()/700 + i)*10, f.r - i*8, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+    }
+
+    function drawTree(x, y, s=1) {
+      ctx.fillStyle = '#6b4f2a';
+      ctx.fillRect(x-8*s, y, 16*s, 38*s);
+      ctx.fillStyle = '#166534';
+      ctx.beginPath(); ctx.arc(x, y, 28*s, 0, Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.arc(x-18*s, y+10*s, 22*s, 0, Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.arc(x+18*s, y+8*s, 22*s, 0, Math.PI*2); ctx.fill();
+    }
+
+    function drawEntity(e) {
+      if (!e.active) return;
+      ctx.save();
+      if (e.type === 'wreck') {
+        ctx.fillStyle = '#94a3b8';
+        ctx.beginPath(); ctx.arc(e.x, e.y, e.r + 10, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#eab308';
+        ctx.beginPath(); ctx.arc(e.x + 7, e.y - 4, 8, 0, Math.PI * 2); ctx.fill();
+      }
+      if (e.type === 'piece') {
+        ctx.fillStyle = '#cbd5e1';
+        ctx.fillRect(e.x-8, e.y-8, 16, 16);
+      }
+      if (e.type === 'leaf') {
+        ctx.fillStyle = '#86efac';
+        ctx.beginPath(); ctx.ellipse(e.x, e.y, 9, 14, 0.5, 0, Math.PI*2); ctx.fill();
+      }
+      if (e.type === 'robot') {
+        drawRobot(e.x, e.y);
+      }
+      if (e.type === 'trunk') {
+        ctx.fillStyle = '#7c4a22';
+        ctx.fillRect(e.x - e.w/2, e.y - e.h/2, e.w, e.h);
+      }
+      if (e.type === 'nest') {
+        ctx.fillStyle = '#a16207';
+        ctx.beginPath(); ctx.arc(e.x, e.y, e.r, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#78350f';
+        ctx.beginPath(); ctx.arc(e.x, e.y, e.r-10, 0, Math.PI * 2); ctx.fill();
+      }
+      if (e.type === 'egg') {
+        ctx.fillStyle = '#fef3c7';
+        ctx.beginPath(); ctx.ellipse(e.x, e.y, 9, 12, 0, 0, Math.PI*2); ctx.fill();
+      }
+      if (e.type === 'npc' && e.name === 'Tala') {
+        drawTala(e.x, e.y);
+      }
+      if (e.type === 'workshop') {
+        ctx.fillStyle = '#374151';
+        ctx.beginPath(); ctx.arc(e.x, e.y, e.r, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = '#fbbf24';
+        ctx.fillRect(e.x - 12, e.y - 6, 24, 12);
+      }
+      if (e.type === 'npc' && e.name === 'Rango') {
+        drawRango(e.x, e.y);
+      }
+      if (e.type === 'animal') {
+        ctx.fillStyle = '#fca5a5';
+        ctx.beginPath(); ctx.arc(e.x, e.y, e.r, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = '#7f1d1d';
+        ctx.fillRect(e.x-5, e.y-16, 4, 10); ctx.fillRect(e.x+1, e.y-16, 4, 10);
+      }
+      if (e.type === 'firezone') {
+        ctx.fillStyle = 'rgba(249,115,22,.3)';
+        ctx.beginPath(); ctx.arc(e.x, e.y, e.r, 0, Math.PI*2); ctx.fill();
+      }
+      if (e.type === 'spring') {
+        ctx.fillStyle = '#38bdf8';
+        ctx.beginPath(); ctx.arc(e.x, e.y, e.r, 0, Math.PI*2); ctx.fill();
+      }
+      if (e.type === 'memory') {
+        ctx.fillStyle = '#93c5fd';
+        ctx.beginPath(); ctx.arc(e.x, e.y, e.r, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = '#dbeafe';
+        ctx.fillRect(e.x-5, e.y-5, 10, 10);
+      }
+      drawInteractHint(e);
+      ctx.restore();
+    }
+
+    function drawInteractHint(e) {
+      if (!nearPlayer(e, 10)) return;
+      ctx.fillStyle = 'rgba(0,0,0,.65)';
+      ctx.fillRect(e.x - 34, e.y - 42, 68, 22);
+      ctx.fillStyle = '#fff';
+      ctx.font = '12px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('SPACE', e.x, e.y - 27);
+      ctx.textAlign = 'left';
+    }
+
+    function drawKobi(x, y) {
+      ctx.fillStyle = '#9ca3af';
+      ctx.beginPath(); ctx.arc(x, y, 18, 0, Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.arc(x-13, y-12, 8, 0, Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.arc(x+13, y-12, 8, 0, Math.PI*2); ctx.fill();
+      ctx.fillStyle = '#111827';
+      ctx.fillRect(x-3, y-1, 6, 5);
+      ctx.beginPath(); ctx.arc(x-6, y-4, 2, 0, Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.arc(x+6, y-4, 2, 0, Math.PI*2); ctx.fill();
+      ctx.fillStyle = '#d1d5db';
+      ctx.beginPath(); ctx.arc(x, y+15, 9, 0, Math.PI*2); ctx.fill();
+    }
+
+    function drawRobot(x, y) {
+      ctx.fillStyle = state.waterMode ? '#38bdf8' : state.strengthMode ? '#f59e0b' : '#cbd5e1';
+      ctx.fillRect(x-16, y-18, 32, 36);
+      ctx.fillRect(x-24, y-8, 8, 20);
+      ctx.fillRect(x+16, y-8, 8, 20);
+      ctx.fillRect(x-12, y+18, 8, 14);
+      ctx.fillRect(x+4, y+18, 8, 14);
+      ctx.fillStyle = '#111827';
+      ctx.fillRect(x-8, y-8, 16, 10);
+      ctx.fillStyle = '#93c5fd';
+      ctx.fillRect(x-6, y-6, 4, 4); ctx.fillRect(x+2, y-6, 4, 4);
+    }
+
+    function drawTala(x, y) {
+      ctx.fillStyle = '#8b5cf6';
+      ctx.beginPath(); ctx.arc(x, y, 16, 0, Math.PI*2); ctx.fill();
+      ctx.fillStyle = '#a78bfa';
+      ctx.fillRect(x-14, y+10, 28, 10);
+      ctx.fillStyle = '#111827';
+      ctx.beginPath(); ctx.arc(x-4, y-4, 2, 0, Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.arc(x+4, y-4, 2, 0, Math.PI*2); ctx.fill();
+    }
+
+    function drawRango(x, y) {
+      ctx.fillStyle = '#b45309';
+      ctx.beginPath(); ctx.arc(x, y, 18, 0, Math.PI*2); ctx.fill();
+      ctx.fillRect(x-12, y+12, 24, 12);
+      ctx.fillStyle = '#78350f';
+      ctx.fillRect(x+14, y-12, 12, 40);
+    }
+
+    function drawParticles() {
+      for (const p of particles) {
+        ctx.globalAlpha = Math.max(0, p.life / 50);
+        ctx.fillStyle = p.color;
+        ctx.beginPath(); ctx.arc(p.x, p.y, 2.5, 0, Math.PI*2); ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+    }
+
+    function render() {
+      drawBackground();
+      for (const e of entities) drawEntity(e);
+      drawKobi(state.player.x, state.player.y);
+      drawParticles();
+
+      ctx.fillStyle = 'rgba(0,0,0,.38)';
+      ctx.fillRect(12, 12, 255, 86);
+      ctx.fillStyle = '#fff';
+      ctx.font = '16px sans-serif';
+      ctx.fillText('Kobi = tu', 24, 38);
+      ctx.fillText('Apropie-te de obiecte și apasă SPACE', 24, 62);
+      ctx.fillText(`Fază: ${ui.phaseLabel.textContent}`, 24, 86);
+    }
+
+    function loop() {
+      update();
+      render();
+      requestAnimationFrame(loop);
+    }
+
+    ui.actionBtn.addEventListener('click', startGame);
+    ui.restartBtn.addEventListener('click', resetGame);
+
+    resetGame();
+    loop();
+  </script>
+</body>
+</html>
